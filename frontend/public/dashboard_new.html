@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fight Analytics Dashboard | Real-time Kafka Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    header {
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(0, 255, 136, 0.1));
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 20px;
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 229, 255, 0.2);
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    
+    h1 {
+      font-size: 56px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #00e5ff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -1px;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+    }
+    
+    .subtitle {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 255, 0, 0.1);
+      border: 1px solid rgba(0, 255, 0, 0.3);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 15px;
+    }
+    
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #00ff00;
+      animation: pulse 2s infinite;
+      box-shadow: 0 0 15px #00ff00;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+    
+    .winner-banner {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      border: 3px solid #FFF;
+      border-radius: 15px;
+      padding: 30px;
+      text-align: center;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 40px rgba(255, 215, 0, 0.4);
+    }
+    
+    .winner-banner h2 {
+      font-size: 42px;
+      font-weight: 900;
+      color: #000;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+    }
+    
+    .winner-banner p {
+      font-size: 18px;
+      color: #333;
+      font-weight: 600;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    
+    .stat-card {
+      background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.8));
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      border-radius: 16px;
+      padding: 28px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #00e5ff, #00ff88);
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 40px rgba(0, 229, 255, 0.4);
+      border-color: rgba(0, 229, 255, 0.6);
+    }
+    
+    .stat-card h3 {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    
+    .stat-value {
+      font-size: 48px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #00ff88, #00e5ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    
+    .stat-label {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 600;
+    }
+    
+    .event-log {
+      background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(22, 33, 62, 0.8));
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      border-radius: 16px;
+      padding: 28px;
+      position: relative;
+    }
+    
+    .event-log::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #ff3300, #ff6600);
+    }
+    
+    .event-log h3 {
+      color: #fff;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .event-container {
+      max-height: 500px;
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+    
+    .event-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .event-container::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+    }
+    
+    .event-container::-webkit-scrollbar-thumb {
+      background: linear-gradient(135deg, #00e5ff, #00ff88);
+      border-radius: 10px;
+    }
+    
+    .event-item {
+      background: linear-gradient(90deg, rgba(0, 229, 255, 0.1), rgba(0, 255, 136, 0.05));
+      border-left: 4px solid #00e5ff;
+      padding: 16px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      line-height: 1.6;
+    }
+    
+    .event-item:hover {
+      background: linear-gradient(90deg, rgba(0, 229, 255, 0.2), rgba(0, 255, 136, 0.1));
+      transform: translateX(5px);
+    }
+    
+    .event-time {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    
+    .event-details {
+      color: #fff;
+    }
+    
+    .event-player {
+      color: #00e5ff;
+      font-weight: 700;
+    }
+    
+    .event-move {
+      color: #00ff88;
+      font-weight: 700;
+    }
+    
+    .event-damage {
+      color: #ff6b6b;
+      font-weight: 700;
+    }
+    
+    footer {
+      text-align: center;
+      padding: 30px;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 14px;
+      margin-top: 40px;
+    }
+    
+    footer a {
+      color: #00e5ff;
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.2s;
+    }
+    
+    footer a:hover {
+      color: #00ff88;
+    }
+    
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 36px;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>⚔️ FIGHT ANALYTICS</h1>
+      <p class="subtitle">Real-time Kafka + Spark Streaming</p>
+      <div class="live-indicator">
+        <span class="live-dot"></span>
+        <span>LIVE</span>
+      </div>
+    </header>
+
+    <div id="winner-container"></div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Player 1 Damage</h3>
+        <div class="stat-value" id="p1-damage">0</div>
+        <div class="stat-label">Total damage dealt</div>
+      </div>
+      
+      <div class="stat-card">
+        <h3>AI Damage</h3>
+        <div class="stat-value" id="ai-damage">0</div>
+        <div class="stat-label">Total damage dealt</div>
+      </div>
+      
+      <div class="stat-card">
+        <h3>Player 1 HP</h3>
+        <div class="stat-value" id="p1-hp">100</div>
+        <div class="stat-label">Health remaining</div>
+      </div>
+      
+      <div class="stat-card">
+        <h3>AI HP</h3>
+        <div class="stat-value" id="ai-hp">100</div>
+        <div class="stat-label">Health remaining</div>
+      </div>
+      
+      <div class="stat-card">
+        <h3>Player 1 Favorite Move</h3>
+        <div class="stat-value" id="p1-move" style="font-size: 24px;">-</div>
+        <div class="stat-label">Most used attack</div>
+      </div>
+      
+      <div class="stat-card">
+        <h3>AI Favorite Move</h3>
+        <div class="stat-value" id="ai-move" style="font-size: 24px;">-</div>
+        <div class="stat-label">Most used attack</div>
+      </div>
+    </div>
+
+    <div class="event-log">
+      <h3>📊 Live Event Stream</h3>
+      <div class="event-container" id="event-log"></div>
+    </div>
+
+    <footer>
+      <p>Powered by Apache Kafka, Spark Structured Streaming & Redis</p>
+      <p><a href="/" target="_blank">← Back to Game</a></p>
+    </footer>
+  </div>
+
+  <script>
+    async function fetchDashboard() {
+      try {
+        const response = await fetch('http://localhost:8000/api/dashboard');
+        const data = await response.json();
+        
+        const summary = data.match_summary || {};
+        const p1 = summary.player1 || {};
+        const ai = summary.ai || {};
+        
+        document.getElementById('p1-damage').textContent = p1.total_damage || 0;
+        document.getElementById('ai-damage').textContent = ai.total_damage || 0;
+        document.getElementById('p1-hp').textContent = p1.hp_remaining || 100;
+        document.getElementById('ai-hp').textContent = ai.hp_remaining || 100;
+        document.getElementById('p1-move').textContent = p1.most_used_move || '-';
+        document.getElementById('ai-move').textContent = ai.most_used_move || '-';
+        
+        // Winner banner
+        const winnerContainer = document.getElementById('winner-container');
+        if (summary.winner) {
+          const winnerName = summary.winner === 'player1' ? 'PLAYER 1' : 'AI';
+          winnerContainer.innerHTML = `
+            <div class="winner-banner">
+              <h2>🏆 ${winnerName} WINS! 🏆</h2>
+              <p>Victory by K.O.</p>
+            </div>
+          `;
+        } else {
+          winnerContainer.innerHTML = '';
+        }
+        
+        // Event log
+        const events = data.event_log || [];
+        const eventLog = document.getElementById('event-log');
+        eventLog.innerHTML = events.slice(-20).reverse().map(event => {
+          const time = new Date(event.timestamp * 1000).toLocaleTimeString();
+          const blocked = event.is_blocked ? ' (BLOCKED)' : '';
+          return `
+            <div class="event-item">
+              <div class="event-time">${time}</div>
+              <div class="event-details">
+                <span class="event-player">${event.player_id}</span> used 
+                <span class="event-move">${event.move.toUpperCase()}</span> - 
+                <span class="event-damage">${event.damage} DMG</span>${blocked}
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+      } catch (error) {
+        console.error('Error fetching dashboard:', error);
+      }
+    }
+    
+    // Fetch every second
+    fetchDashboard();
+    setInterval(fetchDashboard, 1000);
+  </script>
+</body>
+</html>
