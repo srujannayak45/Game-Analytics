@@ -27,6 +27,50 @@ schema = StructType([
     StructField("timestamp", DoubleType(), True)
 ])
 
+
+def default_match_summary():
+    return {
+        "player1": {
+            "total_damage": 0,
+            "hp_remaining": 100,
+            "move_counts": {"punch": 0, "kick": 0, "heavy": 0, "block": 0},
+            "most_used_move": "none",
+            "hits_landed": 0,
+            "blocks_used": 0,
+            "round_count": 1
+        },
+        "ai": {
+            "total_damage": 0,
+            "hp_remaining": 100,
+            "move_counts": {"punch": 0, "kick": 0, "heavy": 0, "block": 0},
+            "most_used_move": "none",
+            "hits_landed": 0,
+            "blocks_used": 0,
+            "round_count": 1
+        }
+    }
+
+
+def load_summary_from_redis():
+    stored = redis_client.get('match_summary')
+    if not stored:
+        return default_match_summary()
+
+    try:
+        summary = json.loads(stored)
+        base = default_match_summary()
+        for player_id in ['player1', 'ai']:
+            player_summary = summary.get(player_id, {}) if isinstance(summary, dict) else {}
+            base[player_id].update(player_summary)
+            base[player_id]['move_counts'].update(player_summary.get('move_counts', {}))
+        if isinstance(summary, dict) and 'winner' in summary:
+            base['winner'] = summary['winner']
+        else:
+            base['winner'] = None
+        return base
+    except Exception:
+        return default_match_summary()
+
 # Read from Kafka
 df = spark \
     .readStream \
@@ -64,27 +108,9 @@ def process_batch(batch_df, batch_id):
     
     print(f"\n=== Processing Batch {batch_id} with {len(pdf)} events ===")
     
-    # Initialize match summary
-    match_summary = {
-        "player1": {
-            "total_damage": 0,
-            "hp_remaining": 100,
-            "move_counts": {"punch": 0, "kick": 0, "heavy": 0, "block": 0},
-            "most_used_move": "none",
-            "hits_landed": 0,
-            "blocks_used": 0,
-            "round_count": 1
-        },
-        "ai": {
-            "total_damage": 0,
-            "hp_remaining": 100,
-            "move_counts": {"punch": 0, "kick": 0, "heavy": 0, "block": 0},
-            "most_used_move": "none",
-            "hits_landed": 0,
-            "blocks_used": 0,
-            "round_count": 1
-        }
-    }
+    match_summary = load_summary_from_redis()
+    existing_events = redis_client.lrange('event_log', 0, -1)
+    event_log_data = [json.loads(e) for e in existing_events] if existing_events else []
     
     # Group by player
     for player_id in ['player1', 'ai']:
@@ -93,32 +119,35 @@ def process_batch(batch_df, batch_id):
         if len(player_events) == 0:
             continue
         
+        opponent_id = 'ai' if player_id == 'player1' else 'player1'
+        player_summary = match_summary[player_id]
+        
         # Total damage dealt
         total_damage = int(player_events['damage'].sum())
-        match_summary[player_id]['total_damage'] = total_damage
+        player_summary['total_damage'] += total_damage
         
         # Move counts
         for move_type in ['punch', 'kick', 'heavy', 'block']:
             count = int(len(player_events[player_events['move'] == move_type]))
-            match_summary[player_id]['move_counts'][move_type] = count
+            player_summary['move_counts'][move_type] = player_summary['move_counts'].get(move_type, 0) + count
         
         # Most used move
-        move_counts = match_summary[player_id]['move_counts']
+        move_counts = player_summary['move_counts']
         if sum(move_counts.values()) > 0:
             most_used = max(move_counts, key=move_counts.get)
-            match_summary[player_id]['most_used_move'] = most_used
+            player_summary['most_used_move'] = most_used
         
         # Hits landed (non-zero damage moves)
         hits_landed = int(len(player_events[(player_events['damage'] > 0) & (player_events['move'] != 'block')]))
-        match_summary[player_id]['hits_landed'] = hits_landed
+        player_summary['hits_landed'] += hits_landed
         
         # Blocks used
         blocks_used = int(len(player_events[player_events['move'] == 'block']))
-        match_summary[player_id]['blocks_used'] = blocks_used
+        player_summary['blocks_used'] += blocks_used
         
         # Round count
         round_count = int(player_events['round_num'].max()) if len(player_events) > 0 else 1
-        match_summary[player_id]['round_count'] = round_count
+        player_summary['round_count'] = max(player_summary.get('round_count', 1), round_count)
     
     # Calculate HP remaining from the LATEST event for each player
     # Get the most recent HP for each player from the events
@@ -170,6 +199,7 @@ def process_batch(batch_df, batch_id):
             "round_num": int(row['round_num']),
             "timestamp": float(row['timestamp'])
         }
+        event_log_data.append(event_data)
         redis_client.rpush('event_log', json.dumps(event_data))
     
     # Keep only last 100 events

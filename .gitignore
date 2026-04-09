@@ -49,3 +49,8 @@ frontend/build/
 spark/metastore_db/
 spark/derby.log
 spark/checkpoint/
+
+DEPLOYMENT_OPTIONS.md
+setup_complete.sh
+SIMPLE_START_GUIDE.md
+

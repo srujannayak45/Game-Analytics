@@ -25,6 +25,6 @@
     }
   ],
   "env": {
-    "REACT_APP_API_URL": "http://localhost:8000"
+    "REACT_APP_API_URL": "https://backend-six-sage-75.vercel.app"
   }
 }
